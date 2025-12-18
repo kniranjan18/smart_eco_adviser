@@ -177,6 +177,71 @@ const deleteChallenge = async (req, res) => {
   }
 };
 
+// @desc    Get leaderboard (top users by points)
+// @route   GET /api/challenges/leaderboard
+// @access  Private
+const getLeaderboard = async (req, res) => {
+  try {
+    // Get all completed challenges with user info
+    const completedChallenges = await UserChallenge.find({ status: 'completed' })
+      .populate('userId', 'name email')
+      .populate('challengeId', 'points co2Impact');
+
+    // Aggregate points per user
+    const userPointsMap = {};
+    completedChallenges.forEach(uc => {
+      if (uc.userId && uc.challengeId) {
+        const userId = uc.userId._id.toString();
+        if (!userPointsMap[userId]) {
+          userPointsMap[userId] = {
+            userId: uc.userId._id,
+            name: uc.userId.name,
+            email: uc.userId.email,
+            points: 0,
+            co2Saved: 0,
+            challengesCompleted: 0
+          };
+        }
+        userPointsMap[userId].points += uc.challengeId.points;
+        userPointsMap[userId].co2Saved += uc.challengeId.co2Impact;
+        userPointsMap[userId].challengesCompleted += 1;
+      }
+    });
+
+    // Convert to array and sort by points
+    const leaderboard = Object.values(userPointsMap)
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 10) // Top 10
+      .map((user, index) => ({
+        rank: index + 1,
+        ...user,
+        isCurrentUser: req.user._id.toString() === user.userId.toString()
+      }));
+
+    // Find current user's rank if not in top 10
+    const currentUserId = req.user._id.toString();
+    const currentUserInTop10 = leaderboard.find(u => u.userId.toString() === currentUserId);
+    
+    let currentUserRank = null;
+    if (!currentUserInTop10 && userPointsMap[currentUserId]) {
+      const allUsers = Object.values(userPointsMap).sort((a, b) => b.points - a.points);
+      const userIndex = allUsers.findIndex(u => u.userId.toString() === currentUserId);
+      if (userIndex !== -1) {
+        currentUserRank = {
+          rank: userIndex + 1,
+          ...userPointsMap[currentUserId],
+          isCurrentUser: true
+        };
+      }
+    }
+
+    res.json({ leaderboard, currentUserRank });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 module.exports = {
   getChallenges,
   getUserChallenges,
@@ -184,5 +249,6 @@ module.exports = {
   updateChallengeProgress,
   createChallenge,
   updateChallenge,
-  deleteChallenge
+  deleteChallenge,
+  getLeaderboard
 };

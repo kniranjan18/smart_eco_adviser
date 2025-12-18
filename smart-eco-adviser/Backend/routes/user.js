@@ -7,5 +7,6 @@ const userController = require('../controllers/userController');
 router.get('/profile', protect, userController.getProfile);
 router.put('/profile', protect, userController.updateProfile);
 router.get('/stats', protect, userController.getStats);
+router.get('/achievements', protect, userController.getAchievements);
 
 module.exports = router;
