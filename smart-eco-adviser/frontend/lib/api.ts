@@ -144,11 +144,25 @@ export const challengeAPI = {
 
 // Eco Tips APIs
 export const ecoTipsAPI = {
-  getTips: async (lat?: number, lon?: number, city?: string) => {
+  getTips: async (
+    lat?: number,
+    lon?: number,
+    city?: string,
+    profile?: {
+      commuteKm?: number;
+      dietType?: string;
+      budget?: string;
+      goals?: string[];
+    }
+  ) => {
     const params = new URLSearchParams();
     if (lat) params.append('lat', lat.toString());
     if (lon) params.append('lon', lon.toString());
     if (city) params.append('city', city);
+    if (profile?.commuteKm) params.append('commuteKm', String(profile.commuteKm));
+    if (profile?.dietType) params.append('dietType', profile.dietType);
+    if (profile?.budget) params.append('budget', profile.budget);
+    if (profile?.goals?.length) params.append('goals', profile.goals.join(','));
 
     const response = await fetch(`${API_BASE_URL}/eco-tips?${params.toString()}`, {
       headers: getAuthHeaders(),

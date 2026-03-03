@@ -20,13 +20,16 @@ import {
   Clock,
   DollarSign,
   CheckCircle,
+  Sparkles,
+  Brain,
+  Target,
 } from "lucide-react"
 
 interface Recommendation {
   id: string
   title: string
   description: string
-  category: "transportation" | "energy" | "diet" | "waste"
+  category: "transportation" | "energy" | "diet" | "waste" | "general"
   difficulty: "easy" | "medium" | "hard"
   impact: "low" | "medium" | "high"
   co2Reduction: number
@@ -34,8 +37,18 @@ interface Recommendation {
   timeToImplement: string
   steps: string[]
   tips: string[]
+  aiScore?: number
+  confidence?: number
+  reasoning?: string[]
   saved: boolean
   completed: boolean
+}
+
+interface PersonalizationProfile {
+  commuteKm: number
+  dietType: string
+  budget: string
+  goals: string[]
 }
 
 export function EcoRecommendations() {
@@ -46,6 +59,12 @@ export function EcoRecommendations() {
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all")
   const [location, setLocation] = useState<{ lat: number; lon: number; city: string } | null>(null)
   const [locationError, setLocationError] = useState<string>("")
+  const [profile, setProfile] = useState<PersonalizationProfile>({
+    commuteKm: 12,
+    dietType: "mixed",
+    budget: "medium",
+    goals: ["lower_emissions", "reduce_cost"],
+  })
 
   useEffect(() => {
     getUserLocation()
@@ -100,9 +119,16 @@ export function EcoRecommendations() {
     }
   }
 
+  useEffect(() => {
+    if (location) {
+      loadEcoTips(location.lat, location.lon, location.city)
+    }
+  }, [profile])
+
   const loadEcoTips = async (lat: number, lon: number, city: string) => {
     try {
-      const response = await ecoTipsAPI.getTips(lat, lon, city)
+      setLoading(true)
+      const response = await ecoTipsAPI.getTips(lat, lon, city, profile)
       
       // Map API tips to recommendation format
       const mappedTips: Recommendation[] = response.tips.map((tip: any, index: number) => ({
@@ -113,7 +139,10 @@ export function EcoRecommendations() {
         difficulty: tip.impact === "high" ? "easy" : tip.impact === "medium" ? "medium" : "hard",
         impact: tip.impact,
         co2Reduction: tip.co2Reduction || 0,
-        costSaving: Math.floor(Math.random() * 200) + 50,
+        aiScore: tip.aiScore,
+        confidence: tip.confidence,
+        reasoning: tip.reasoning,
+        costSaving: tip.costSaving || 0,
         timeToImplement: "1-2 weeks",
         steps: [
           "Research and plan your approach",
@@ -295,6 +324,7 @@ export function EcoRecommendations() {
     energy: Home,
     diet: Utensils,
     waste: Trash2,
+    general: Sparkles,
   }
 
   const difficultyColors = {
@@ -314,10 +344,10 @@ export function EcoRecommendations() {
       {/* Header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">
-          Eco Recommendations for {location?.city || "Your Location"}
+          AI Eco Recommendations for {location?.city || "Your Location"}
         </h1>
         <p className="text-muted-foreground mb-6">
-          Location-specific tips and actionable advice for sustainable living
+          Personalized by EcoRank-LR model using your location, weather, and lifestyle profile
         </p>
         {locationError && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
@@ -356,6 +386,61 @@ export function EcoRecommendations() {
         </div>
       </div>
 
+      <Card className="border-primary/20 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-950/20 dark:to-teal-950/20">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2"><Brain className="h-5 w-5 text-primary" /> Personalization Controls</CardTitle>
+          <CardDescription>Adjust your lifestyle profile to retrain recommendation ranking instantly.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="text-sm font-medium">Daily commute (km)</label>
+            <Input
+              type="number"
+              min={0}
+              value={profile.commuteKm}
+              onChange={(e) => setProfile((prev) => ({ ...prev, commuteKm: Number(e.target.value || 0) }))}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Diet type</label>
+            <Select value={profile.dietType} onValueChange={(v) => setProfile((prev) => ({ ...prev, dietType: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mixed">Mixed</SelectItem>
+                <SelectItem value="vegetarian">Vegetarian</SelectItem>
+                <SelectItem value="non-vegetarian">Non-vegetarian</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Monthly sustainability budget</label>
+            <Select value={profile.budget} onValueChange={(v) => setProfile((prev) => ({ ...prev, budget: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Primary goal</label>
+            <Select
+              value={profile.goals[0]}
+              onValueChange={(v) => setProfile((prev) => ({ ...prev, goals: [v] }))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lower_emissions">Lower emissions</SelectItem>
+                <SelectItem value="reduce_cost">Reduce cost</SelectItem>
+                <SelectItem value="save_time">Save time</SelectItem>
+                <SelectItem value="health">Improve health</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -377,6 +462,7 @@ export function EcoRecommendations() {
             <SelectItem value="energy">Energy</SelectItem>
             <SelectItem value="diet">Diet</SelectItem>
             <SelectItem value="waste">Waste</SelectItem>
+            <SelectItem value="general">General</SelectItem>
           </SelectContent>
         </Select>
         <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty}>
@@ -398,7 +484,7 @@ export function EcoRecommendations() {
           // Fallback to a valid icon if an unknown category is received from API
           const Icon = (categoryIcons as any)[rec.category] || Car
           return (
-            <Card key={rec.id} className={rec.completed ? "border-green-200 bg-green-50/50" : ""}>
+            <Card key={rec.id} className={`shadow-sm hover:shadow-md transition-all ${rec.completed ? "border-green-200 bg-green-50/50" : ""}`}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -406,6 +492,9 @@ export function EcoRecommendations() {
                       <Icon className="h-5 w-5 text-primary" />
                       <Badge className={difficultyColors[rec.difficulty]}>{rec.difficulty}</Badge>
                       <Badge className={impactColors[rec.impact]}>{rec.impact} impact</Badge>
+                      {rec.aiScore && (
+                        <Badge variant="secondary" className="flex items-center gap-1"><Sparkles className="h-3 w-3" />AI {rec.aiScore}%</Badge>
+                      )}
                     </div>
                     <CardTitle className="text-lg">{rec.title}</CardTitle>
                     <CardDescription className="mt-2">{rec.description}</CardDescription>
@@ -448,6 +537,18 @@ export function EcoRecommendations() {
                       </div>
                     </div>
                   </div>
+
+                  {rec.reasoning && rec.reasoning.length > 0 && (
+                    <div className="rounded-lg bg-primary/5 border border-primary/10 p-3">
+                      <p className="text-xs font-semibold mb-1 flex items-center gap-1"><Target className="h-3.5 w-3.5" />Why this is recommended</p>
+                      <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+                        {rec.reasoning.map((reason, idx) => (
+                          <li key={idx}>{reason}</li>
+                        ))}
+                      </ul>
+                      {rec.confidence && <p className="text-xs mt-2 text-primary">Model confidence: {rec.confidence}%</p>}
+                    </div>
+                  )}
 
                   <div>
                     <h4 className="font-semibold text-sm mb-2">Steps:</h4>
